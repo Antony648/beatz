@@ -1,0 +1,27 @@
+	Phase 0 — single-process functional player
+Read one WAV file with libsndfile and play via libao / ALSA in same process.
+Implement simple blocking playback, play/pause, next/prev from stdin keyboard to test logic.
+Use a ring buffer if you want decoder separate from output.
+
+	Phase 1 — daemon + CLI
+Add Unix domain socket server in the player process.
+Implement a minimal CLI that connects and sends PLAY/PAUSE/INFO.
+Make the player respond to commands while playing.
+Add playlist queue, next and prev logic.
+
+	Phase 2 — daemonize & single-instance
+Implement proper daemonizing (or provide systemd unit).
+Ensure CLI starts daemon if not running (or prints helpful message).
+Lock socket with exclusive bind; use PID file optional.
+
+	Phase 3 — format support & shuffle
+Add libmpg123, libsndfile, or ffmpeg to support MP3/FLAC/etc.
+Implement shuffle queue (Fisher-Yates shuffle of remaining queue).
+
+	Phase 4 — TUI + advanced features
+Implement beatz -show TUI with ncurses or notcurses.
+Show current song, progress bar, next songs, controls. TUI should poll for status or subscribe to updates over socket.
+Add volume control, equalizer (visualization), crossfade.
+
+	Phase 5 — polish
+Persistent playlists, resume last position, system notifications (libnotify), MPRIS or DBus integration optional.

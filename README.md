@@ -1,0 +1,3 @@
+    beatz music player
+this is going to be an attempt to make a completley terminal based music player
+for people like me who do not like to go outside the terminal espeically for music...
