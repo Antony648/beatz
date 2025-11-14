@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <alsa/asoundlib.h>
 #define 	PLAY	1
 #define		PAUSE 	0
 #define		RESUME	2
@@ -18,12 +19,73 @@ struct song
 	bool played;
 };
 
-void basic_play(struct song* song_list,int len)
+void play_single(song song1,int* i_addr)
 {
-	for(int i=0;i<len;i++)
-		play_song(song_list[i].name);
-}
+	char path[20]="~/Music/";
+	strcat(path,song1.name);
+	snd_pcm_t* handle;
+	snd_pcm_hw_params_t* params;
+	SF_INFO info;
+	SNDFILE *file;
+	unsigned int buffer_size,period_size;
+	int frame_size,user_buffer_bytes;
+	short * user_buffer;
 
+	//open a handler
+	snd_pcm_open(&handler,"default",SND_PCM_STREAM_PLAYBACK,0);
+	snd_pcm_hw_params_alloca(&params);
+	snd_pcm_hw_params_any(handler,params);
+
+	snd_pcm_hw_params_set_access(handle,params,SND_PCM_ACCESS_RW_INTERLEAVED);
+
+	file=sf_open(path,SFM_READ,&info);
+
+	snd_pcm_hw_params_set_rate(handler, params,info.samplerate);
+	snd_pcm_hw_params_set_channels(handler,params,info.channels);
+	// need to conver sf format to snd_pcm format
+	int format=info.format && SF_FORMAT_SUBMASK;
+	snd_pcm_format_t alsa_format;
+	switch(format)
+	{
+		case SF_FORMAT_PCM_16:
+			asla_format=SND_PCM_FORMAT_S16_LE;
+			break;
+		case SF_FORMAT_PCM_24:
+			asla_format=SND_PCM_FORMAT_S24_LE;
+			break;
+		case SF_FORMAT_PCM_32:
+			asla_format=SND_PCM_FORMAT_S32_LE;
+			break;
+		case SF_FORMAT_PCM_FLOAT:
+			asla_format=SND_PCM_FORMAT_FLOAT_LE;
+			break;
+		default:
+			printf("unsupported format");
+			return;	//will return function and play next song
+	}
+	snd_pcm_hw_params_set_format(handle,params,alsa_format);
+	buffer_size=4096;
+	
+	snd_pcm_hw_params_set_buffer_size_near(handler,params,&buffer_size);	//setting near values
+
+	period_size=buffer_size/4;
+	snd_pcm_hw_params_set_period_size_near(handler,params,&period_size): //setting near values
+
+	snd_pcm_hw_params(handle,params);//after settng near values
+					 //asking alsa for set value
+	
+	snd_pcm_hw_params_set_buffer_size(handler,params,&buffer_size);
+	snd_pcm_hw_params_set_period_size(handler,params,&period_size,0);
+	frame_size=info.channels * sizeof(short);
+	user_buffer_bytes= period_size * frame_size;
+	
+	user_buffer=(short*)malloc(user_buffer_bytes);
+	//loop with critical section...
+	
+	free((void*) user_buffer);
+
+
+}
 bool is_music_file(char* file_name)
 {
 	int len=strlen(file_name);
@@ -72,7 +134,9 @@ void player_func()
 		printf("~/Music folder empty");
 		exit(0)
 	}
-	//now song_list will contain all the paths...
+	//now song_list will contain all the names...
+	for(int i=0;i<len;i++)
+		play_single(song_list[i],&i);
 	
 
 		
@@ -80,25 +144,40 @@ void player_func()
 
 void  interface_func()
 {
-	char read_buf[5]={0,0,0,0,0};int temp;
+	char read_buf[5]={0,0,0,0,0};int tmp,val;
+
 	int server_fd=socket(AF_UNIX,SOCK_STREAM,0);
-	bind(server_fd,"/tmp/musicd.sock");
-	listen(server_fd);
-	int client_id=accept(server_id);
+	struct sockaddr_un sock_addr={0};
+
+	sock_addr.sun_family=AF_UNIX;
+	strcpy(sock_addr.sun_path,"/tmp/musicd.sock");
+	
+	unlink(sock_addr.sun_path);
+	bind(server_fd,&sock_addr,sizeof(sock_addr);
+	listen(server_fd,1);
+
+	int client_fd=accept(server_fd,NULL,NULL);
+	struct pollfd poll_fd;
+	poll_fd.fd=client_fd;
+	poll_fd.events=POLLIN;
 
 	while(true)
 	{
-		read(client_fd,read_buf,1);	//max len is 1 
-	
-		temp=atoi(read_buf);
+		val=poll(&poll_fd,1,-1);
+		if(val >0 && (poll_fd.revents & POLLIN))
+		{
+			if(read(client_fd,read_buf,1))
+			{
+				tmp=atoi(read_buf);
+				pthread_mutex_lock(&lock);
+				master=tmp;
+				pthread_mutex_unlock(&lock);
 
-		pthread_mutex_lock(&lock);
-		master =temp;
-		pthread_mutex_unlock(&lock);
-
-		if(temp==SUICIDE)
-			return;
-		usleep(50000);
+				if(tmp==SUICIDE)
+					break;
+			}
+			
+		}
 	}
 	return;
 }
@@ -114,18 +193,8 @@ int main()
 	}
 	char pid_val[6];
 	sprintf(pid_val,"%d",get_pid());
-	write(fd,pid_val,len(pid_val));
+	write(fd,pid_val,strlen(pid_val));
 
-	int fd1=creat("/tmp/musicd.sock",0644);
-	if(fd1<0)
-	{
-		printf("failed in creating socketfile");
-		close(fd);
-		unlink("/tmp/musicd.pid");
-		return 0;
-	}
-	//at this point deamon has created the pid file written to it
-	//also created sock file for communication....
 	
 	pthread_mutex_init(&lock);
 	master =0;
