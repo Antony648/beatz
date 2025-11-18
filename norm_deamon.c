@@ -5,7 +5,7 @@
 #include <dirent.h>
 #include <alsa/asoundlib.h>
 #define 	PLAY	1
-#define		PAUSE 	0
+#define		PAUSE 	6
 #define		RESUME	2
 #define 	NEXT	3
 #define 	PREV	4
@@ -153,7 +153,7 @@ void  interface_func()
 	strcpy(sock_addr.sun_path,"/tmp/musicd.sock");
 	
 	unlink(sock_addr.sun_path);
-	bind(server_fd,&sock_addr,sizeof(sock_addr);
+	bind(server_fd,&sock_addr,sizeof(sock_addr));
 	listen(server_fd,1);
 
 	int client_fd=accept(server_fd,NULL,NULL);
