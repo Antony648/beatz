@@ -52,7 +52,7 @@ void start_norm_deamon()
 	int len = offsetof(struct sockaddr_un,sun_path)+strlen(soc_addr.sun_path)+1;
 	if(connect(sock,(struct sockaddr*)&soc_addr,len)==0)
 	{
-		write(sock,SUICIDE,strlen(SUICIDE));
+		write_all(sock,SUICIDE,strlen(SUICIDE));
 		close(sock);
 		usleep(100000);
 	}
