@@ -38,6 +38,8 @@ int main()
             }
             buffer[bytes]='\0';
             printf("reply from server:%s\n",buffer);
+            if(!strcmp(buffer,"exit"))
+                break;
         }
         return 0;
 }

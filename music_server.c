@@ -126,29 +126,43 @@ int handle_command(int client_fd)
 		for(int i=0;buffer[i]!='\0';i++)
 			if(buffer[i]=='\n' || buffer[i]=='\r')
 				buffer[i]='\0';
-		if(!strcmp("play",buffer)||!strcmp("resume",buffer))
+		if(!strcmp("exit",buffer))
+		{
+			write(client_fd,"exit",4);
+			return 3;	
+		}
+		else if(!strcmp("play",buffer)||!strcmp("resume",buffer))
 		{
 			if(STATE!=PLAYING) state_change=true;
 			STATE=PLAYING;
+			write(client_fd,"ok",2);
 		}
-		if(!strcmp("pause",buffer))
+		else if(!strcmp("pause",buffer))
 		{
 			if(STATE!=PAUSED) state_change=true;
 			STATE=PAUSED;
+			write(client_fd,"ok",2);
 		}
-		write(client_fd,"ok\n",3);
-		if(!strcmp("previous",buffer))
+		
+		else if(!strcmp("previous",buffer))
+		{
+			write(client_fd,"ok",2);
 			return 1;
-		if(!strcmp("next",buffer))
+		}
+		else if(!strcmp("next",buffer))
+		{
+			write(client_fd,"ok",2);
 			return 2;
-		if(!strcmp("exit",buffer))
-			return 3;
+		}
+		else
+			write(client_fd,"non valid command",17);
+		//ugly i know will find alternative later :)
 		
 	}
 	else
 	{
 		//errror in reading or client connection terminated
-		return 3;
+		return 4;
 	}
 	return 0;
 }
