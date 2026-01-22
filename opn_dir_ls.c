@@ -3,6 +3,7 @@
 #include <sys/un.h>
 #include <dirent.h>
 #include <string.h>
+#define PATH "/home/anto/Music/"
 struct table_ent
 {
 	char* file_name;
@@ -11,7 +12,7 @@ struct table_ent
 };
 int main()
 {
-	DIR* target_dir=opendir("/home/anto/Music");
+	DIR* target_dir=opendir(PATH);
 	if(target_dir==NULL)
 	{
 		perror("failed in opening directory");return 1;
@@ -23,9 +24,10 @@ int main()
 	{	
 		if(target_dirent->d_type != DT_REG)
 			continue;
-		len=strlen(target_dirent->d_name);
+		len=strlen(target_dirent->d_name)+strlen(PATH);
 		buffer=(char*)malloc(len+1);
-		strncpy(buffer,target_dirent->d_name,len);
+	//	strncpy(buffer,target_dirent->d_name,len);
+		snprintf(buffer,len+1,"%s%s",PATH,target_dirent->d_name);
 		buffer[len]='\0';
 		if(strcmp(&buffer[len-4],".wav"))
 		{
@@ -64,7 +66,7 @@ int main()
 	printf("%s\n",start->file_name);
 	free(start->file_name);
 	free(start);
-
+	closedir(target_dir);
 	return 0;
 
 }

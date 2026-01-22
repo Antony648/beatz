@@ -13,7 +13,7 @@
 #define DEVICE "default"
 
 #define SOCKET_PATH "/tmp/musicd.sock"
-#define FOLDER_PATH "/home/anto/Music"
+#define FOLDER_PATH "/home/anto/Music/"
 #define BUF_LEN 256
 
 /* Minimal WAV header (PCM only) */
@@ -64,9 +64,10 @@ int generate_music_table(const char* path)
 	{	
 		if(target_dirent->d_type != DT_REG)
 			continue;
-		len=strlen(target_dirent->d_name);
+		len=strlen(target_dirent->d_name)+strlen(FOLDER_PATH);
 		buffer=(char*)malloc(len+1);
-		strncpy(buffer,target_dirent->d_name,len);
+		//strncpy(buffer,target_dirent->d_name,len);
+		snprintf(buffer,len+1,"%s%s",FOLDER_PATH,target_dirent->d_name);
 		buffer[len]='\0';
 		if(strcmp(&buffer[len-4],".wav"))
 		{
@@ -92,6 +93,7 @@ int generate_music_table(const char* path)
 	}
 	start->prev=current;
 	current->next=start;
+	closedir(target_dir);
 	return 0;
 }
 void destroy_table()
@@ -205,6 +207,7 @@ loop_start:
 	    int fd = open(current->file_name, O_RDONLY);
 	    if (fd < 0) {
 		perror("open");
+		//printf("%s",current->file_name);
 		return 1;
 	    }
 
