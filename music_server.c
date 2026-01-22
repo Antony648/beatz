@@ -8,10 +8,12 @@
 #include <sys/socket.h>
 #include <alsa/asoundlib.h>
 #include <stdbool.h>
+#include <dirent.h>
 
 #define DEVICE "default"
 
 #define SOCKET_PATH "/tmp/musicd.sock"
+#define FOLDER_PATH "/home/anto/Music"
 #define BUF_LEN 256
 
 /* Minimal WAV header (PCM only) */
@@ -30,6 +32,14 @@ typedef struct {
     char     data[4];        // "data"
     uint32_t data_size;
 } wav_header_t;
+
+struct table_ent
+{
+	char* file_name;
+	struct table_ent* next;
+	struct table_ent* prev;
+};
+
 enum state_t
 {
 	PLAYING,
@@ -38,6 +48,68 @@ enum state_t
 char* a[3]={"/home/anto/Music/song.wav","/home/anto/Music/song2.wav","/home/anto/Music/song3.wav"};
 enum state_t 	STATE;
 bool state_change;
+struct table_ent* start;
+int generate_music_table(const char* path)
+{
+	DIR* target_dir=opendir(path);
+	if(target_dir==NULL)
+	{
+		printf("failed in opening directory");return 1;
+	}
+	struct dirent *target_dirent;
+	struct table_ent *current;
+	start=NULL;
+	char* buffer;int len;
+	for(target_dirent=readdir(target_dir);target_dirent;target_dirent=readdir(target_dir))
+	{	
+		if(target_dirent->d_type != DT_REG)
+			continue;
+		len=strlen(target_dirent->d_name);
+		buffer=(char*)malloc(len+1);
+		strncpy(buffer,target_dirent->d_name,len);
+		buffer[len]='\0';
+		if(strcmp(&buffer[len-4],".wav"))
+		{
+			free(buffer);
+			continue;
+		}
+		if(!start)
+		{
+			start=malloc(sizeof(start));
+			start->prev=NULL;
+			current=start;
+		}
+		else
+			if(current)
+			{
+				current->next=malloc(sizeof(current));
+				current->next->prev=current;
+				current=current->next;
+			}
+		current->file_name=buffer;
+		current->next=NULL;
+		
+	}
+	start->prev=current;
+	current->next=start;
+	return 0;
+}
+void destroy_table()
+{
+	struct table_ent*current, *k=start;
+	while(start->next !=k)
+	{
+//		printf("%s\n",start->file_name);
+		free(start->file_name);
+		current=start;
+		start=start->next;
+		free(current);
+	}
+//	printf("%s\n",start->file_name);
+	free(start->file_name);
+	free(start);
+
+}
 int handle_command(int client_fd)
 {
 	char buffer[256];
@@ -67,6 +139,8 @@ int handle_command(int client_fd)
 			return 1;
 		if(!strcmp("next",buffer))
 			return 2;
+		if(!strcmp("exit",buffer))
+			return 3;
 		
 	}
 	else
@@ -76,8 +150,19 @@ int handle_command(int client_fd)
 	}
 	return 0;
 }
-int main(int argc, char *argv[])
+
+void prepare_drain_close_fd(snd_pcm_t *pcm,int fd)
 {
+	snd_pcm_prepare(pcm);
+	snd_pcm_drain(pcm);
+	snd_pcm_close(pcm);
+	close(fd);
+}
+
+int main()
+{
+	if(generate_music_table((const char*)FOLDER_PATH))
+		exit(1);
 	STATE=PAUSED;int rtn;
 	state_change=false;
 	int server_fd,client_fd;
@@ -85,7 +170,9 @@ int main(int argc, char *argv[])
 	char buffer[BUF_LEN];
 
 	unlink(SOCKET_PATH);
-	server_fd=socket(AF_UNIX,SOCK_STREAM,0); //create socket
+	server_fd=socket(AF_UNIX,SOCK_STREAM,0); //create socke
+	printf("create socket\n");
+	fflush(0);
 	if(server_fd <0)
 	{
 		perror("error in socket creation");exit(1);
@@ -109,11 +196,13 @@ wait_accept:
 		goto wait_accept;
 	}
 	printf("connected with client_fd:%d\n",client_fd);
-	int i=0;
-	while(i>=0 && i<3)
+	struct table_ent* current=start;
+	while(true)
 	{
 loop_start:
-	    int fd = open(a[i], O_RDONLY);
+		if(!current)
+			continue;
+	    int fd = open(current->file_name, O_RDONLY);
 	    if (fd < 0) {
 		perror("open");
 		return 1;
@@ -193,23 +282,22 @@ loop_start:
 				{
 					printf("drastic\n"); //remove
 					if(rtn==1 )
-						if( i>0)
-							i-=1;
-						else
-							printf("aldready at first\n ");
+						current=current->prev;
 					else if(rtn==2)
-						if(i<2)
-							i+=1;
-						else
-							printf("aldready at end\n");
-					else//if(rtn ==3)
+						current=current->next;
+					else if(rtn==3)
+					{
+						printf("killing server and freeing all allocs\n");
+						destroy_table();
+						prepare_drain_close_fd(pcm,fd);
+						close(client_fd);
+						exit(0);
+					}
+					else//if(rtn ==4)
 					{
 						//connection terminated or error
 						printf("error_restablish conncetion\n");
-						snd_pcm_drain(pcm);
-						snd_pcm_prepare(pcm);
-						snd_pcm_close(pcm);
-						close(fd);
+						prepare_drain_close_fd(pcm,fd);
 						close(client_fd);
 						rtn=0;
 						STATE=PAUSED;
@@ -217,10 +305,7 @@ loop_start:
 					}
 
 					printf("song change\n");
-					snd_pcm_prepare(pcm);
-					snd_pcm_drain(pcm);
-					snd_pcm_close(pcm);
-					close(fd);
+					prepare_drain_close_fd(pcm,fd);
 					rtn=0;
 					goto loop_start;
 
@@ -275,7 +360,7 @@ loop_start:
 	    snd_pcm_drain(pcm);
 	    snd_pcm_close(pcm);
 		close(fd);
-		i++;
+		current=current->next;
 	}
 
 	return 0;
